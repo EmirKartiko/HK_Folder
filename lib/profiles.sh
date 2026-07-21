@@ -57,8 +57,7 @@ runner_profile() {
     find_default_directory \
         "GitLab Runner" \
         "/home/gitlab-runner/builds" \
-        "/var/lib/gitlab-runner/builds" \
-        "/home/Iul/sonar-migration-lab" \
+        "/var/lib/gitlab-runner/builds"
 
 }
 
