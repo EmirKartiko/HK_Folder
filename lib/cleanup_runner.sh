@@ -15,6 +15,7 @@
 # GLOBAL VARIABLES
 # ------------------------------------------------------------
 
+RUNNER_DIRECTORIES=()
 RUNNER_PROJECTS=()
 RUNNER_CANDIDATES=()
 
@@ -28,51 +29,58 @@ RUNNER_DELETE_SIZE=0
 # ------------------------------------------------------------
 # SCAN ACTUAL GITLAB RUNNER PROJECTS
 # ------------------------------------------------------------
+search_runner_directories() {
+
+    RUNNER_DIRECTORIES=()
+
+    echo
+    echo "Searching GitLab Runner directories..."
+    echo
+
+    local POSSIBLE_DIRS=(
+        "/home/gitlab-runner/builds"
+        "/var/lib/gitlab-runner/builds"
+    )
+
+    for DIR in "${POSSIBLE_DIRS[@]}"
+    do
+
+        if [ -d "$DIR" ]; then
+
+            echo "[OK] $DIR"
+
+            RUNNER_DIRECTORIES+=("$DIR")
+
+        fi
+
+    done
+
+    echo
+
+    if [ "${#RUNNER_DIRECTORIES[@]}" -eq 0 ]; then
+
+        echo "[ERROR] No GitLab Runner build directories found."
+
+        return 1
+
+    fi
+
+    return 0
+}
 
 scan_runner_projects() {
 
     RUNNER_PROJECTS=()
 
     echo
-    echo "Searching GitLab Runner directories..."
+    echo "Scanning actual GitLab Runner projects..."
     echo
 
-    for DIR in "${DIRECTORIES[@]}"
-    do
-
-        if [ ! -d "$DIR" ]; then
-            echo "[SKIP] Directory not found: $DIR"
-            continue
-        fi
-
-        echo "[OK] $DIR"
-
-    done
-
-    echo
-    echo "Scanning GitLab Runner..."
-    echo
-
-    for DIR in "${DIRECTORIES[@]}"
+    for DIR in "${RUNNER_DIRECTORIES[@]}"
     do
 
         [ -d "$DIR" ] || continue
 
-        #
-        # Detect actual Git repositories.
-        #
-        # Example:
-        #
-        # /home/gitlab-runner/builds/
-        #   runner-id/
-        #     0/
-        #       group/
-        #         project/
-        #           .git/
-        #
-        # We detect ".git", then use its parent
-        # directory as the actual project root.
-        #
         while IFS= read -r GIT_DIR
         do
 
@@ -81,9 +89,9 @@ scan_runner_projects() {
             PROJECT=$(dirname "$GIT_DIR")
 
             #
-            # Avoid duplicate project entries.
+            # Prevent duplicate entries
             #
-            local FOUND=0
+            FOUND=0
 
             for EXISTING_PROJECT in "${RUNNER_PROJECTS[@]}"
             do
@@ -113,9 +121,7 @@ scan_runner_projects() {
 
     echo
     echo "Found ${#RUNNER_PROJECTS[@]} actual project(s)."
-
 }
-
 
 # ------------------------------------------------------------
 # GET LAST ACTIVITY OF PROJECT
@@ -598,13 +604,12 @@ runner_profile() {
     echo "========================================="
 
     #
-    # Check configuration.
+    # STEP 1
+    # Auto detect GitLab Runner build directories
     #
-    if [ "${#DIRECTORIES[@]}" -eq 0 ]; then
+    if ! search_runner_directories; then
 
         echo
-        echo "[ERROR] No GitLab Runner directories configured."
-
         read -rp "Press Enter to continue..."
 
         return
@@ -612,25 +617,27 @@ runner_profile() {
     fi
 
 
-    echo
-    echo "Configuration:"
-    echo
-    echo "Age Threshold  : $AGE_DAYS days"
-    echo "Size Threshold : $SIZE_MB MB"
-
-
-    # --------------------------------------------------------
-    # SCAN
-    # --------------------------------------------------------
-
+    #
+    # STEP 2
+    # Find actual projects inside Runner directories
+    #
     scan_runner_projects
 
 
     if [ "${#RUNNER_PROJECTS[@]}" -eq 0 ]; then
 
         echo
-        echo "No GitLab Runner projects found."
+        echo "No actual GitLab Runner projects found."
 
+        echo
+        echo "Runner directories checked:"
+
+        for DIR in "${RUNNER_DIRECTORIES[@]}"
+        do
+            echo "  - $DIR"
+        done
+
+        echo
         read -rp "Press Enter to continue..."
 
         return
@@ -638,22 +645,19 @@ runner_profile() {
     fi
 
 
-    # --------------------------------------------------------
-    # FILTER
-    # --------------------------------------------------------
-
+    #
+    # STEP 3
+    # Filter based on age + size
+    #
     filter_runner_projects
 
-
-    # --------------------------------------------------------
-    # NO CANDIDATES
-    # --------------------------------------------------------
 
     if [ "${#RUNNER_CANDIDATES[@]}" -eq 0 ]; then
 
         echo
         echo "Nothing to clean."
 
+        echo
         read -rp "Press Enter to continue..."
 
         return
@@ -661,19 +665,20 @@ runner_profile() {
     fi
 
 
-    # --------------------------------------------------------
-    # SIZE
-    # --------------------------------------------------------
-
+    #
+    # STEP 4
+    # Calculate estimated cleanup size
+    #
     calculate_runner_size
 
 
-    # --------------------------------------------------------
-    # CONFIRM
-    # --------------------------------------------------------
-
+    #
+    # STEP 5
+    # Confirmation
+    #
     if ! confirm_runner_cleanup; then
 
+        echo
         read -rp "Press Enter to continue..."
 
         return
@@ -681,14 +686,13 @@ runner_profile() {
     fi
 
 
-    # --------------------------------------------------------
-    # DELETE
-    # --------------------------------------------------------
-
+    #
+    # STEP 6
+    # Delete
+    #
     delete_runner_projects
 
 
     echo
     read -rp "Press Enter to continue..."
-
 }
