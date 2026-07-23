@@ -296,9 +296,7 @@ filter_runner_projects() {
         # PROJECT AGE
         # ----------------------------------------------------
 
-        PROJECT_AGE=$(
-            (NOW - LAST_ACTIVITY) / 86400
-        )
+        PROJECT_AGE=$(( (NOW - LAST_ACTIVITY) / 86400 ))
 
 
         # ----------------------------------------------------
@@ -518,9 +516,7 @@ delete_runner_projects() {
 
         NOW=$(date +%s)
 
-        CURRENT_AGE=$(
-            (NOW - CURRENT_ACTIVITY) / 86400
-        )
+        CURRENT_AGE=$(($((NOW - CURRENT_ACTIVITY)) / 86400))
 
         if [ "$CURRENT_AGE" -lt "$AGE_DAYS" ]; then
 
